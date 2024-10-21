@@ -3,9 +3,10 @@
 
 import type { EndpointOption } from './types.js';
 
-import { POLKADOT_GENESIS } from '../api/constants.js';
+import { PASEO_GENESIS, POLKADOT_GENESIS } from '../api/constants.js';
 import { chainsAcalaSVG, chainsBitgreenPNG, chainsComposableFinancePNG, chainsEquilibriumSVG, chainsFrequencySVG, chainsGeminisPNG, chainsHydrationSVG, chainsInvarchJPEG, chainsLaosPNG, chainsLogionPNG, chainsNeurowebPNG, chainsOakPNG, chainsPeaqPNG, chainsPendulumSVG, chainsPeoplePolkadotSVG, chainsPolkadotCircleSVG, chainsTotemSVG, chainsWatrPNG } from '../ui/logos/chains/index.js';
-import { nodesAjunaPNG, nodesAresOdysseySVG, nodesAssetHubSVG, nodesAstarPNG, nodesAventusSVG, nodesBifrostSVG, nodesBridgeHubSVG, nodesCentrifugePNG, nodesCloverSVG, nodesCoinversationPNG, nodesContinuumPNG, nodesCrustParachainSVG, nodesDarwiniaSVG, nodesEfinitySVG, nodesEwxSVG, nodesHashedPNG, nodesHyperbridgePNG, nodesIntegriteeSVG, nodesInterlaySVG, nodesKiltPNG, nodesKylinPNG, nodesLitentryPNG, nodesMantaPNG, nodesMoonbeamSVG, nodesMoonsamaSVG, nodesMythosPNG, nodesNodleSVG, nodesOmnibtcSVG, nodesParallelSVG, nodesPhalaSVG, nodesPolimecSVG, nodesPolkadexSVG, nodesRobonomicsSVG, nodesSoraSubstrateSVG, nodesSubdaoPNG, nodesSubgameSVG, nodesSubsocialSVG, nodesT3rnPNG, nodesUniqueSVG, nodesZeitgeistPNG } from '../ui/logos/nodes/index.js';
+import { nodesAjunaPNG, nodesAresOdysseySVG, nodesAssetHubSVG, nodesAstarPNG, nodesAventusSVG, nodesBifrostSVG, nodesBridgeHubSVG, nodesCentrifugePNG, nodesCloverSVG, nodesCoinversationPNG, nodesContinuumPNG, nodesCrustParachainSVG, nodesDarwiniaSVG, nodesEfinitySVG, nodesEwxSVG, nodesHashedPNG, nodesHyperbridgePNG, nodesIntegriteeSVG, nodesInterlaySVG, nodesKiltPNG, nodesKylinPNG, nodesLitentryPNG, nodesMandalaPNG, nodesMantaPNG, nodesMoonbeamSVG, nodesMoonsamaSVG, nodesMythosPNG, nodesNodleSVG, nodesOmnibtcSVG, nodesParallelSVG, nodesPhalaSVG, nodesPolimecSVG, nodesPolkadexSVG, nodesRobonomicsSVG, nodesSoraSubstrateSVG, nodesSubdaoPNG, nodesSubgameSVG, nodesSubsocialSVG, nodesT3rnPNG, nodesUniqueSVG, nodesZeitgeistPNG } from '../ui/logos/nodes/index.js';
+import { testParasPaseo } from './testingRelayPaseo.js';
 import { getTeleports } from './util.js';
 
 // The available endpoints that will show in the dropdown. For the most part (with the exception of
@@ -963,17 +964,23 @@ export const prodParasPolkadotCommon: EndpointOption[] = [
 ];
 
 export const prodRelayPolkadot: EndpointOption = {
-  dnslink: 'polkadot',
-  genesisHash: POLKADOT_GENESIS,
-  info: 'polkadot',
+  // dnslink: 'polkadot',
+  dnslink: 'paseo',
+  // genesisHash: POLKADOT_GENESIS,
+  genesisHash: PASEO_GENESIS,
+  // info: 'polkadot',
+  info: 'paseo',
   isPeopleForIdentity: true,
   isRelay: true,
   linked: [
     // ...prodParasPolkadotCommon
     // ...prodParasPolkadot
+    // ...testParasPaseo
   ],
   providers: {
-    Allnodes: 'wss://polkadot-rpc.publicnode.com'
+    'Baliola 1': 'wss://mlg1.mandalachain.io',
+    'Baliola 2': 'wss://mlg2.mandalachain.io'
+    // Allnodes: 'wss://polkadot-rpc.publicnode.com'
     // 'Geometry Labs': 'wss://polkadot.geometry.io/websockets', // https://github.com/polkadot-js/apps/pull/6746
     // 'Automata 1RPC': 'wss://1rpc.io/dot',
     // Blockops: 'wss://polkadot-public-rpc.blockops.network/ws',
@@ -990,10 +997,15 @@ export const prodRelayPolkadot: EndpointOption = {
     // 'light client': 'light://substrate-connect/polkadot'
   },
   teleport: getTeleports(prodParasPolkadotCommon),
-  text: 'Polkadot',
+  // text: 'Polkadot',
+  text: 'Niskala',
   ui: {
-    color: '#e6007a',
+    // color: '#e6007a',
+    // identityIcon: 'polkadot',
+    // logo: chainsPolkadotCircleSVG
+    color: '#0036ac',
     identityIcon: 'polkadot',
-    logo: chainsPolkadotCircleSVG
+    logo: nodesMandalaPNG
+
   }
 };
