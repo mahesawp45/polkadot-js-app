@@ -1,545 +1,441 @@
 // Copyright 2017-2024 @polkadot/app-accounts authors & contributors
 // SPDX-License-Identifier: Apache-2.0
 
-/// <reference types="@polkadot/dev-test/globals.d.ts" />
+import type { ActionStatus } from '@polkadot/react-components/Status/types';
+import type { KeyringAddress } from '@polkadot/ui-keyring/types';
+import type { BN } from '@polkadot/util';
+import type { AccountBalance, Delegation, SortedAccount } from '../types.js';
+import type { SortCategory } from '../util.js';
 
-import type { AddressFlags } from '@polkadot/react-hooks/types';
-import type { Table } from '@polkadot/test-support/pagesElements';
-import type { u32 } from '@polkadot/types';
-import type { AccountId, Multisig, ProxyDefinition, Timepoint, Voting, VotingDelegating } from '@polkadot/types/interfaces';
-import type { AccountRow } from '../../test/pageElements/AccountRow.js';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { fireEvent, screen, within } from '@testing-library/react';
-
-import { POLKADOT_GENESIS } from '@polkadot/apps-config';
-import i18next from '@polkadot/react-components/i18n';
-import { toShortAddress } from '@polkadot/react-components/util';
-import { anAccountWithBalance, anAccountWithBalanceAndMeta, anAccountWithInfo, anAccountWithInfoAndMeta, anAccountWithMeta, anAccountWithStaking } from '@polkadot/test-support/creation/account';
-import { makeStakingLedger as ledger } from '@polkadot/test-support/creation/staking';
-import { alice, bob, MemoryStore } from '@polkadot/test-support/keyring';
-import { balance, mockApiHooks, showBalance } from '@polkadot/test-support/utils';
-import { TypeRegistry } from '@polkadot/types/create';
+import { Button, FilterInput, SortDropdown, styled, SummaryBox, Table } from '@polkadot/react-components';
+import { getAccountCryptoType } from '@polkadot/react-components/util';
+import { useAccounts, useApi, useDelegations, useFavorites, useIpfs, useLedger, useNextTick, useProxies, useToggle } from '@polkadot/react-hooks';
 import { keyring } from '@polkadot/ui-keyring';
-import { BN } from '@polkadot/util';
+import { settings } from '@polkadot/ui-settings';
+import { BN_ZERO, isFunction } from '@polkadot/util';
 
-import { AccountsPage } from '../../test/pages/accountsPage.js';
+import CreateModal from '../modals/Create.js';
+import ImportModal from '../modals/Import.js';
+import Ledger from '../modals/Ledger.js';
+import Local from '../modals/LocalAdd.js';
+import Multisig from '../modals/MultisigCreate.js';
+import Proxy from '../modals/ProxiedAdd.js';
+import Qr from '../modals/Qr.js';
+import { useTranslation } from '../translate.js';
+import { SORT_CATEGORY, sortAccounts } from '../util.js';
+import Account from './Account.js';
+import BannerClaims from './BannerClaims.js';
+import BannerExtension from './BannerExtension.js';
+import Summary from './Summary.js';
 
-// FIXME isSplit Table
-// eslint-disable-next-line jest/no-disabled-tests
-describe.skip('Accounts page', () => {
-  let accountsPage: AccountsPage;
+interface Balances {
+  accounts: Record<string, AccountBalance>;
+  summary?: AccountBalance;
+}
 
-  beforeAll(async () => {
-    await i18next.changeLanguage('en');
+interface Props {
+  className?: string;
+  onStatusChange: (status: ActionStatus) => void;
+}
 
-    if (keyring.getAccounts().length === 0) {
-      keyring.loadAll({ isDevelopment: true, store: new MemoryStore() });
+interface SortControls {
+  sortBy: SortCategory;
+  sortFromMax: boolean;
+}
+
+type GroupName = 'accounts' | 'chopsticks' | 'hardware' | 'injected' | 'multisig' | 'proxied' | 'qr' | 'testing';
+
+const DEFAULT_SORT_CONTROLS: SortControls = { sortBy: 'date', sortFromMax: true };
+
+const STORE_FAVS = 'accounts:favorites';
+
+const GROUP_ORDER: GroupName[] = ['accounts', 'injected', 'qr', 'hardware', 'proxied', 'multisig', 'testing', 'chopsticks'];
+
+function groupAccounts (accounts: SortedAccount[]): Record<GroupName, string[]> {
+  const ret: Record<GroupName, string[]> = {
+    accounts: [],
+    chopsticks: [],
+    hardware: [],
+    injected: [],
+    multisig: [],
+    proxied: [],
+    qr: [],
+    testing: []
+  };
+
+  for (let i = 0, count = accounts.length; i < count; i++) {
+    const { account, address } = accounts[i];
+    const cryptoType = getAccountCryptoType(address);
+
+    if (account?.meta.isHardware) {
+      ret.hardware.push(address);
+    } else if (account?.meta.isTesting) {
+      ret.testing.push(address);
+    } else if (cryptoType === 'injected') {
+      ret.injected.push(address);
+    } else if (cryptoType === 'multisig') {
+      ret.multisig.push(address);
+    } else if (cryptoType === 'proxied') {
+      ret.proxied.push(address);
+    } else if (cryptoType === 'chopsticks') {
+      ret.chopsticks.push(address);
+    } else if (cryptoType === 'qr') {
+      ret.qr.push(address);
+    } else {
+      ret.accounts.push(address);
     }
-  });
+  }
 
-  beforeEach(() => {
-    accountsPage = new AccountsPage();
-    accountsPage.clearAccounts();
-  });
+  return ret;
+}
 
-  describe('when no accounts', () => {
-    beforeEach(() => {
-      accountsPage.render([]);
-    });
+function Overview ({ className = '', onStatusChange }: Props): React.ReactElement<Props> {
+  const { t } = useTranslation();
+  const { api, fork, isElectron } = useApi();
+  const { allAccounts, hasAccounts } = useAccounts();
+  const { isIpfs } = useIpfs();
+  const { isLedgerEnabled } = useLedger();
+  const [isCreateOpen, toggleCreate] = useToggle();
+  const [isImportOpen, toggleImport] = useToggle();
+  const [isLedgerOpen, toggleLedger] = useToggle();
+  const [isMultisigOpen, toggleMultisig] = useToggle();
+  const [isProxyOpen, toggleProxy] = useToggle();
+  const [isLocalOpen, toggleLocal] = useToggle();
+  const [isQrOpen, toggleQr] = useToggle();
+  const [favorites, toggleFavorite] = useFavorites(STORE_FAVS);
+  const [balances, setBalances] = useState<Balances>({ accounts: {} });
+  const [filterOn, setFilter] = useState<string>('');
+  const [sortedAccounts, setSorted] = useState<SortedAccount[]>([]);
+  const [{ sortBy, sortFromMax }, setSortBy] = useState<SortControls>(DEFAULT_SORT_CONTROLS);
+  const delegations = useDelegations();
+  const proxies = useProxies();
+  const isNextTick = useNextTick();
 
-    // eslint-disable-next-line jest/expect-expect
-    it('shows sort-by controls', async () => {
-      await accountsPage.reverseSortingOrder();
-    });
+  const onSortChange = useCallback(
+    (sortBy: SortCategory) => setSortBy(({ sortFromMax }) => ({ sortBy, sortFromMax })),
+    []
+  );
 
-    it('shows a table', async () => {
-      const accountsTable = await accountsPage.getTable();
+  const onSortDirectionChange = useCallback(
+    () => setSortBy(({ sortBy, sortFromMax }) => ({ sortBy, sortFromMax: !sortFromMax })),
+    []
+  );
 
-      expect(accountsTable).not.toBeNull();
-    });
+  const sortOptions = useRef(SORT_CATEGORY.map((text) => ({ text, value: text })));
 
-    it('the accounts table contains no account rows', async () => {
-      const accountRows = await accountsPage.getAccountRows();
+  const setBalance = useCallback(
+    (account: string, balance: AccountBalance) =>
+      setBalances(({ accounts }: Balances): Balances => {
+        accounts[account] = balance;
 
-      expect(accountRows).toHaveLength(0);
-    });
+        const aggregate = (key: keyof AccountBalance) =>
+          Object.values(accounts).reduce((total: BN, value: AccountBalance) => total.add(value[key]), BN_ZERO);
 
-    // eslint-disable-next-line jest/expect-expect
-    it('the accounts table contains a message about no accounts available', async () => {
-      const noAccountsMessage = 'You don\'t have any accounts. Some features are currently hidden and will only become available once you have accounts.';
-      const accountsTable = await accountsPage.getTable();
+        return {
+          accounts,
+          summary: {
+            bonded: aggregate('bonded'),
+            locked: aggregate('locked'),
+            redeemable: aggregate('redeemable'),
+            total: aggregate('total'),
+            transferable: aggregate('transferable'),
+            unbonding: aggregate('unbonding')
+          }
+        };
+      }),
+    []
+  );
 
-      await accountsTable.assertText(noAccountsMessage);
-    });
+  const canStoreAccounts = useMemo(
+    () => isElectron || (!isIpfs && settings.get().storage === 'on'),
+    [isElectron, isIpfs]
+  );
 
-    it('no summary is displayed', () => {
-      const summaries = screen.queryAllByTestId(/card-summary:total \w+/i);
+  // We use favorites only to check if it includes some element,
+  // so Object is better than array for that because hashmap access is O(1).
+  const favoritesMap = useMemo(
+    () => Object.fromEntries(favorites.map((x) => [x, true])),
+    [favorites]
+  );
 
-      expect(summaries).toHaveLength(0);
-    });
-  });
+  // detect multisigs
+  const hasPalletMultisig = useMemo(
+    () => isFunction((api.tx.multisig || api.tx.utility)?.approveAsMulti),
+    [api]
+  );
 
-  describe('when some accounts exist', () => {
-    it('the accounts table contains some account rows', async () => {
-      accountsPage.renderDefaultAccounts(2);
-      const accountRows = await accountsPage.getAccountRows();
+  // proxy support
+  const hasPalletProxy = useMemo(
+    () => isFunction(api.tx.proxy?.addProxy),
+    [api]
+  );
 
-      expect(accountRows).toHaveLength(2);
-    });
+  const accountsMap = useMemo(
+    () => allAccounts
+      .map((address, index): Omit<SortedAccount, 'account'> & { account: KeyringAddress | undefined } => {
+        const deleg = delegations && delegations[index]?.isDelegating && delegations[index]?.asDelegating;
+        const delegation: Delegation | undefined = (deleg && {
+          accountDelegated: deleg.target.toString(),
+          amount: deleg.balance,
+          conviction: deleg.conviction
+        }) || undefined;
 
-    // eslint-disable-next-line jest/expect-expect
-    it('account rows display the total balance info', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalance({ freeBalance: balance(500) }),
-        anAccountWithBalance({ freeBalance: balance(200), reservedBalance: balance(150) })
+        return {
+          account: keyring.getAccount(address),
+          address,
+          delegation,
+          isFavorite: favoritesMap[address ?? ''] ?? false
+        };
+      })
+      .filter((a): a is SortedAccount => !!a.account)
+      .reduce((ret: Record<string, SortedAccount>, x) => {
+        ret[x.address] = x;
+
+        return ret;
+      }, {}),
+    [allAccounts, favoritesMap, delegations]
+  );
+
+  const header = useMemo(
+    (): Record<GroupName, [React.ReactNode?, string?, number?, (() => void)?][]> => {
+      const ret: Record<GroupName, [React.ReactNode?, string?, number?, (() => void)?][]> = {
+        accounts: [[<>{t('accounts')}<div className='sub'>{t('all locally stored accounts')}</div></>]],
+        chopsticks: [[<>{t('chopsticks')}<div className='sub'>{t('local accounts added via chopsticks fork')}</div></>]],
+        hardware: [[<>{t('hardware')}<div className='sub'>{t('accounts managed via hardware devices')}</div></>]],
+        injected: [[<>{t('extension')}<div className='sub'>{t('accounts available via browser extensions')}</div></>]],
+        multisig: [[<>{t('multisig')}<div className='sub'>{t('on-chain multisig accounts')}</div></>]],
+        proxied: [[<>{t('proxied')}<div className='sub'>{t('on-chain proxied accounts')}</div></>]],
+        qr: [[<>{t('via qr')}<div className='sub'>{t('accounts available via mobile devices')}</div></>]],
+        testing: [[<>{t('development')}<div className='sub'>{t('accounts derived via development seeds')}</div></>]]
+      };
+
+      Object.values(ret).forEach((a): void => {
+        a[0][1] = 'start';
+        a[0][2] = 4;
+      });
+
+      return ret;
+    },
+    [t]
+  );
+
+  const grouped = useMemo(
+    () => groupAccounts(sortedAccounts),
+    [sortedAccounts]
+  );
+
+  const accounts = useMemo(
+    () => Object.values(accountsMap).reduce<Record<string, React.ReactNode>>((all, { account, address, delegation, isFavorite }, index) => {
+      all[address] = (
+        <Account
+          account={account}
+          delegation={delegation}
+          filter={filterOn}
+          isFavorite={isFavorite}
+          key={address}
+          proxy={proxies?.[index]}
+          setBalance={setBalance}
+          toggleFavorite={toggleFavorite}
+        />
       );
 
-      const rows = await accountsPage.getAccountRows();
-
-      await rows[0].assertBalancesTotal(balance(500));
-      await rows[1].assertBalancesTotal(balance(350));
-    });
-
-    // eslint-disable-next-line jest/expect-expect
-    it('account rows display the details balance info', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalance({ freeBalance: balance(500), lockedBalance: balance(30) }),
-        anAccountWithBalance({ availableBalance: balance(50), freeBalance: balance(200), reservedBalance: balance(150) })
-      );
-
-      const rows = await accountsPage.getAccountRows();
-
-      await rows[0].assertBalancesDetails([
-        { amount: balance(0), name: 'transferable' },
-        { amount: balance(30), name: 'locked' }]);
-      await rows[1].assertBalancesDetails([
-        { amount: balance(50), name: 'transferable' },
-        { amount: balance(150), name: 'reserved' }]);
-    });
-
-    // FIXME multiple tables
-    // eslint-disable-next-line jest/no-disabled-tests
-    it.skip('derived account displays parent account info', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithMeta({ isInjected: true, name: 'ALICE', whenCreated: 200 }),
-        anAccountWithMeta({ name: 'ALICE_CHILD', parentAddress: alice, whenCreated: 300 })
-      );
-
-      const accountRows = await accountsPage.getAccountRows();
-
-      expect(accountRows).toHaveLength(2);
-      await accountRows[1].assertParentAccountName('ALICE');
-    });
-
-    // FIXME broken after column rework
-    // eslint-disable-next-line jest/no-disabled-tests, jest/expect-expect
-    it.skip('a separate column for parent account is not displayed', async () => {
-      accountsPage.renderDefaultAccounts(1);
-      const accountsTable = await accountsPage.getTable();
-
-      accountsTable.assertColumnNotExist('parent');
-      accountsTable.assertColumnExists('type');
-    });
-
-    it('account rows display the shorted address', async () => {
-      accountsPage.renderAccountsForAddresses(
-        alice
-      );
-      const accountRows = await accountsPage.getAccountRows();
-
-      expect(accountRows).toHaveLength(1);
-      const aliceShortAddress = toShortAddress(alice);
-
-      await accountRows[0].assertShortAddress(aliceShortAddress);
-    });
-
-    // eslint-disable-next-line jest/expect-expect
-    it('when account is not tagged, account row details displays none info', async () => {
-      accountsPage.renderDefaultAccounts(1);
-      const rows = await accountsPage.getAccountRows();
-
-      await rows[0].assertTags('none');
-    });
-
-    // eslint-disable-next-line jest/expect-expect
-    it('when account is tagged, account row details displays tags', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithInfo({ tags: ['my tag', 'Super Tag'] })
-      );
-
-      const rows = await accountsPage.getAccountRows();
-
-      await rows[0].assertTags('my tagSuper Tag');
-    });
-
-    it('account details rows toggled on icon toggle click', async () => {
-      accountsPage.renderDefaultAccounts(1);
-      const row = (await accountsPage.getAccountRows())[0];
-
-      expect(row.detailsRow).toHaveClass('isCollapsed');
-
-      await row.expand();
-
-      expect(row.detailsRow).toHaveClass('isExpanded');
-    });
-
-    it('displays some summary', () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalance({ freeBalance: balance(500) }),
-        anAccountWithBalance({ freeBalance: balance(200), reservedBalance: balance(150) })
-      );
-
-      const summaries = screen.queryAllByTestId(/card-summary:total \w+/i);
-
-      expect(summaries).not.toHaveLength(0);
-    });
-
-    it('displays balance summary', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalance({ freeBalance: balance(500) }),
-        anAccountWithBalance({ freeBalance: balance(200), reservedBalance: balance(150) })
-      );
-
-      const summary = await screen.findByTestId(/card-summary:(total )?balance/i);
-
-      expect(summary).toHaveTextContent(showBalance(500 + 200 + 150));
-    });
-
-    it('displays transferable summary', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalance({ availableBalance: balance(400) }),
-        anAccountWithBalance({ availableBalance: balance(600) })
-      );
-
-      const summary = await screen.findByTestId(/card-summary:(total )?transferable/i);
-
-      expect(summary).toHaveTextContent(showBalance(400 + 600));
-    });
-
-    it('displays locked summary', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalance({ lockedBalance: balance(400) }),
-        anAccountWithBalance({ lockedBalance: balance(600) })
-      );
-
-      const summary = await screen.findByTestId(/card-summary:(total )?locked/i);
-
-      expect(summary).toHaveTextContent(showBalance(400 + 600));
-    });
-
-    it('displays bonded summary', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithStaking({ stakingLedger: ledger(balance(70)) }),
-        anAccountWithStaking({ stakingLedger: ledger(balance(20)) })
-      );
-
-      const summary = await screen.findByTestId(/card-summary:(total )?bonded/i);
-
-      expect(summary).toHaveTextContent(showBalance(70 + 20));
-    });
-
-    it('displays unbonding summary', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithStaking({
-          unlocking: [
-            {
-              remainingEras: new BN('1000000000'),
-              value: balance(200)
-            },
-            {
-              remainingEras: new BN('2000000000'),
-              value: balance(300)
-            },
-            {
-              remainingEras: new BN('3000000000'),
-              value: balance(400)
-            }
-          ]
-        }),
-        anAccountWithStaking({
-          unlocking: [
-            {
-              remainingEras: new BN('1000000000'),
-              value: balance(100)
-            },
-            {
-              remainingEras: new BN('2000000000'),
-              value: balance(200)
-            },
-            {
-              remainingEras: new BN('3000000000'),
-              value: balance(300)
-            }
-          ]
-        })
-      );
-
-      const summary = await screen.findByTestId(/card-summary:(total )?unbonding/i);
-
-      expect(summary).toHaveTextContent(showBalance(200 + 300 + 400 + 100 + 200 + 300));
-    });
-
-    it('displays redeemable summary', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithStaking({ redeemable: balance(4000) }),
-        anAccountWithStaking({ redeemable: balance(5000) })
-      );
-
-      const summary = await screen.findByTestId(/card-summary:(total )?redeemable/i);
-
-      expect(summary).toHaveTextContent(showBalance(4000 + 5000));
-    });
-
-    it('sorts accounts by date by default', async () => {
-      accountsPage.renderAccountsWithDefaultAddresses(
-        anAccountWithBalanceAndMeta({ freeBalance: balance(1) }, { whenCreated: 200 }),
-        anAccountWithBalanceAndMeta({ freeBalance: balance(2) }, { whenCreated: 300 }),
-        anAccountWithBalanceAndMeta({ freeBalance: balance(3) }, { whenCreated: 100 })
-      );
-      expect(await accountsPage.getCurrentSortCategory()).toHaveTextContent('date');
-
-      const accountsTable = await accountsPage.getTable();
-
-      await accountsTable.assertRowsOrder([3, 1, 2]);
-    });
-
-    // FIXME multiple tables now
-    // eslint-disable-next-line jest/no-disabled-tests
-    describe.skip('when sorting is used', () => {
-      let accountsTable: Table;
-
-      beforeEach(async () => {
-        accountsPage.renderAccountsWithDefaultAddresses(
-          anAccountWithBalanceAndMeta({ freeBalance: balance(1) }, { isInjected: true, name: 'bbb', whenCreated: 200 }),
-          anAccountWithBalanceAndMeta({ freeBalance: balance(2) }, {
-            hardwareType: 'ledger',
-            isHardware: true,
-            name: 'bb',
-            parentAddress: alice,
-            whenCreated: 300
-          }),
-          anAccountWithBalanceAndMeta({ freeBalance: balance(3) }, { isInjected: true, name: 'aaa', whenCreated: 100 })
-        );
-
-        accountsTable = await accountsPage.getTable();
-      });
-
-      it('changes default dropdown value', async () => {
-        await accountsPage.sortBy('balances');
-        expect(await accountsPage.getCurrentSortCategory())
-          .toHaveTextContent('balances');
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('sorts by parent if asked', async () => {
-        await accountsPage.sortBy('parent');
-        await accountsTable.assertRowsOrder([3, 1, 2]);
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('sorts by name if asked', async () => {
-        await accountsPage.sortBy('name');
-        await accountsTable.assertRowsOrder([3, 2, 1]);
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('sorts by date if asked', async () => {
-        await accountsPage.sortBy('date');
-        await accountsTable.assertRowsOrder([3, 1, 2]);
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('sorts by balances if asked', async () => {
-        await accountsPage.sortBy('balances');
-        await accountsTable.assertRowsOrder([1, 2, 3]);
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('implements stable sort', async () => {
-        await accountsPage.sortBy('name');
-        await accountsTable.assertRowsOrder([3, 2, 1]);
-        await accountsPage.sortBy('balances');
-        await accountsTable.assertRowsOrder([1, 2, 3]);
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('respects reverse button', async () => {
-        await accountsPage.sortBy('name');
-        await accountsTable.assertRowsOrder([3, 2, 1]);
-        await accountsPage.sortBy('balances');
-        await accountsTable.assertRowsOrder([1, 2, 3]);
-        await accountsPage.reverseSortingOrder();
-        await accountsTable.assertRowsOrder([3, 2, 1]);
-        await accountsPage.sortBy('name');
-        await accountsTable.assertRowsOrder([1, 2, 3]);
-      });
-    });
-  });
-
-  describe('badges', () => {
-    let accountRows: AccountRow[];
-
-    beforeEach(() => {
-      mockApiHooks.setMultisigApprovals([
-        [new TypeRegistry().createType('Hash', POLKADOT_GENESIS), {
-          approvals: [bob as unknown as AccountId],
-          deposit: balance(927000000000000),
-          depositor: bob as unknown as AccountId,
-          when: { height: new BN(1190) as u32, index: new BN(1) as u32 } as Timepoint
-        } as Multisig
-        ]
-      ]);
-      mockApiHooks.setDelegations([{ asDelegating: { target: bob as unknown as AccountId } as unknown as VotingDelegating, isDelegating: true } as Voting]);
-      mockApiHooks.setProxies([[[{ delegate: alice as unknown as AccountId, proxyType: { isAny: true, isGovernance: true, isNonTransfer: true, isStaking: true, toNumber: () => 1 } } as unknown as ProxyDefinition], new BN(1)]]);
-    });
-
-    describe('when genesis hash is not set', () => {
-      beforeEach(async () => {
-        accountsPage.renderAccountsWithDefaultAddresses(
-          anAccountWithInfoAndMeta({ flags: { isDevelopment: true } as AddressFlags }, { name: 'alice' }),
-          anAccountWithMeta({ name: 'bob' })
-        );
-        accountRows = await accountsPage.getAccountRows();
-      });
-
-      describe('when isDevelopment flag', () => {
-        let aliceRow: AccountRow;
-
-        beforeEach(async () => {
-          aliceRow = accountRows[0];
-          await aliceRow.assertAccountName('ALICE');
-        });
-
-        // eslint-disable-next-line jest/expect-expect
-        it('the development badge is displayed', async () => {
-          await aliceRow.assertBadge('wrench-badge');
-        });
-
-        // eslint-disable-next-line jest/expect-expect
-        it('the all networks badge is not displayed', () => {
-          aliceRow.assertNoBadge('exclamation-triangle-badge');
-        });
-
-        // eslint-disable-next-line jest/expect-expect
-        it('the regular badge is not displayed', () => {
-          aliceRow.assertNoBadge('transparent-badge');
-        });
-      });
-
-      describe('when no isDevelopment flag', () => {
-        let bobRow: AccountRow;
-
-        beforeEach(async () => {
-          bobRow = accountRows[1];
-          await bobRow.assertAccountName('BOB');
-        });
-
-        // eslint-disable-next-line jest/expect-expect
-        it('the development badge is not displayed', () => {
-          bobRow.assertNoBadge('wrench-badge');
-        });
-
-        // eslint-disable-next-line jest/expect-expect
-        it('the all networks badge is displayed', async () => {
-          await bobRow.assertBadge('exclamation-triangle-badge');
-        });
-
-        // eslint-disable-next-line jest/expect-expect
-        it('the regular badge is not displayed', () => {
-          bobRow.assertNoBadge('transparent-badge');
-        });
-      });
-    });
-
-    describe('when genesis hash set', () => {
-      beforeEach(async () => {
-        accountsPage.renderAccountsWithDefaultAddresses(
-          anAccountWithInfoAndMeta({ flags: { isDevelopment: true } as AddressFlags }, { genesisHash: '0x1234', name: 'charlie' })
-        );
-        accountRows = await accountsPage.getAccountRows();
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('the development badge is not displayed', () => {
-        accountRows[0].assertNoBadge('wrench-badge');
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('the all networks badge is not displayed', () => {
-        accountRows[0].assertNoBadge('exclamation-triangle-badge');
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('the regular badge is displayed', async () => {
-        await accountRows[0].assertBadge('badge');
-      });
-    });
-
-    describe('show popups', () => {
-      beforeEach(async () => {
-        accountsPage.renderAccountsWithDefaultAddresses(
-          anAccountWithInfoAndMeta({ flags: { isDevelopment: true } as AddressFlags }, { name: 'alice', who: [] })
-        );
-        accountRows = await accountsPage.getAccountRows();
-      });
-
-      // eslint-disable-next-line jest/expect-expect
-      it('development', async () => {
-        await accountRows[0].assertBadge('wrench-badge');
-        const badgePopup = getPopupById(/wrench-badge-hover.*/);
-
-        await within(badgePopup).findByText('This is a development account derived from the known development seed. Do not use for any funds on a non-development network.');
-      });
-
-      it('multisig approvals', async () => {
-        await accountRows[0].assertBadge('file-signature-badge');
-        const badgePopup = getPopupById(/file-signature-badge-hover.*/);
-        const approvalsModalToggle = await within(badgePopup).findByText('View pending approvals');
-
-        fireEvent.click(approvalsModalToggle);
-        const modal = await screen.findByTestId('modal');
-
-        within(modal).getByText('Pending call hashes');
-        expect(approvalsModalToggle).toHaveClass('purpleColor');
-      });
-
-      it('delegate democracy vote', async () => {
-        await accountRows[0].assertBadge('calendar-check-badge');
-        const badgePopup = getPopupById(/calendar-check-badge-hover.*/);
-        const delegateModalToggle = await within(badgePopup).findByText('Manage delegation');
-
-        fireEvent.click(delegateModalToggle);
-        const modal = await screen.findByTestId('modal');
-
-        within(modal).getByText('democracy vote delegation');
-        expect(delegateModalToggle).toHaveClass('normalColor');
-      });
-
-      it('proxy overview', async () => {
-        await accountRows[0].assertBadge('sitemap-badge');
-        const badgePopup = getPopupById(/sitemap-badge-hover.*/);
-        const proxyOverviewToggle = await within(badgePopup).findByText('Manage proxies');
-
-        fireEvent.click(proxyOverviewToggle);
-        const modal = await screen.findByTestId('modal');
-
-        within(modal).getByText('Proxy overview');
-        expect(proxyOverviewToggle).toHaveClass('normalColor');
-      });
-
-      afterEach(() => {
-        mockApiHooks.setMultisigApprovals([]);
-      });
-    });
-
-    function getPopupById (popupId: RegExp): HTMLElement {
-      const badgePopup = accountsPage.getById(popupId);
-
-      if (!badgePopup) {
-        throw new Error('badge popup should be found');
+      return all;
+    }, {}),
+    [accountsMap, filterOn, proxies, setBalance, toggleFavorite]
+  );
+
+  const groups = useMemo(
+    () => GROUP_ORDER.reduce<Record<string, React.ReactNode[]>>((groups, group) => {
+      const items = grouped[group];
+
+      if (items.length) {
+        groups[group] = items.map((account) => accounts[account]);
       }
 
-      return badgePopup;
+      return groups;
+    }, {}),
+    [grouped, accounts]
+  );
+
+  useEffect((): void => {
+    setSorted((prev) => [
+      ...prev
+        .map((x) => accountsMap[x.address])
+        .filter((x): x is SortedAccount => !!x),
+      ...Object
+        .keys(accountsMap)
+        .filter((a) => !prev.find((y) => a === y.address))
+        .map((a) => accountsMap[a])
+    ]);
+  }, [accountsMap]);
+
+  useEffect((): void => {
+    setSorted((sortedAccounts) =>
+      sortAccounts(sortedAccounts, accountsMap, balances.accounts, sortBy, sortFromMax));
+  }, [accountsMap, balances, sortBy, sortFromMax]);
+
+  return (
+    <StyledDiv className={className}>
+      {isCreateOpen && (
+        <CreateModal
+          onClose={toggleCreate}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      {isImportOpen && (
+        <ImportModal
+          onClose={toggleImport}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      {isLedgerOpen && (
+        <Ledger onClose={toggleLedger} />
+      )}
+      {isLocalOpen && (
+        <Local
+          onClose={toggleLocal}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      {isMultisigOpen && (
+        <Multisig
+          onClose={toggleMultisig}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      {isProxyOpen && (
+        <Proxy
+          onClose={toggleProxy}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      {isQrOpen && (
+        <Qr
+          onClose={toggleQr}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      <BannerExtension />
+      <BannerClaims />
+      <Summary balance={balances.summary} />
+      <SummaryBox className='header-box'>
+        <section
+          className='dropdown-section media--1300'
+          data-testid='sort-by-section'
+        >
+          <SortDropdown
+            className='media--1500'
+            defaultValue={sortBy}
+            label={t('sort by')}
+            onChange={onSortChange}
+            onClick={onSortDirectionChange}
+            options={sortOptions.current}
+            sortDirection={
+              sortFromMax
+                ? 'ascending'
+                : 'descending'
+            }
+          />
+          <FilterInput
+            filterOn={filterOn}
+            label={t('filter by name or tags')}
+            setFilter={setFilter}
+          />
+        </section>
+        <Button.Group>
+            <>
+              <Button
+                icon='plus'
+                label={t('Account')}
+                onClick={toggleCreate}
+              />
+              <Button
+                icon='sync'
+                label={t('From JSON')}
+                onClick={toggleImport}
+              />
+            </>
+          <Button
+            icon='qrcode'
+            label={t('From Qr')}
+            onClick={toggleQr}
+          />
+          {isLedgerEnabled && (
+            <Button
+              icon='project-diagram'
+              label={t('From Ledger')}
+              onClick={toggleLedger}
+            />
+          )}
+          {hasAccounts && (
+            <>
+              {hasPalletMultisig && (
+                <Button
+                  icon='plus'
+                  label={t('Multisig')}
+                  onClick={toggleMultisig}
+                />
+              )}
+              {hasPalletProxy && (
+                <Button
+                  icon='plus'
+                  label={t('Proxied')}
+                  onClick={toggleProxy}
+                />
+              )}
+            </>
+          )}
+          {fork && (
+            <Button
+              icon='plus'
+              label={t('Local')}
+              onClick={toggleLocal}
+            />
+          )}
+        </Button.Group>
+      </SummaryBox>
+      {!isNextTick || !sortedAccounts.length
+        ? (
+          <Table
+            empty={isNextTick && sortedAccounts && t("You don't have any accounts. Some features are currently hidden and will only become available once you have accounts.")}
+            header={header.accounts}
+          />
+        )
+        : GROUP_ORDER.map((group) =>
+          groups[group] && (
+            <Table
+              empty={t('No accounts')}
+              header={header[group]}
+              isSplit
+              key={group}
+            >
+              {groups[group]}
+            </Table>
+          )
+        )
+      }
+    </StyledDiv>
+  );
+}
+
+const StyledDiv = styled.div`
+  .ui--Dropdown {
+    width: 15rem;
+  }
+
+  .header-box {
+    .dropdown-section {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
     }
-  });
-});
+
+    .ui--Button-Group {
+      margin-left: auto;
+    }
+  }
+`;
+
+export default React.memo(Overview);
