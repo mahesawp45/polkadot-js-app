@@ -31,7 +31,7 @@ function Apps ({ className = '' }: Props): React.ReactElement<Props> {
 
   return (
     <>
-      <GlobalStyle uiHighlight={apiEndpoint?.ui.color} />
+      <GlobalStyle uiHighlight={uiHighlight} />
       <StyledDiv className={`${className} apps--Wrapper ${themeClassName}`}>
         <Menu />
         <AccountSidebar>

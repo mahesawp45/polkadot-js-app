@@ -25,22 +25,14 @@ export function createCustom (t: TFunction): LinkOption[] {
         isHeader: true,
         text: t('rpc.dev.custom', 'Custom environment', { ns: 'apps-config' }),
         textBy: '',
-        ui: {
-          color: '#33c3c1',
-          // identityIcon: IconTheme,
-          logo: 'https://idchain.id/images/logo.png'
-        },
+        ui: {},
         value: ''
       },
       {
         info: 'WS_URL',
         text: t('rpc.dev.custom.entry', 'Custom {{WS_URL}}', { ns: 'apps-config', replace: { WS_URL } }),
         textBy: WS_URL,
-        ui: {
-          color: '#33c3c1',
-          // identityIcon: IconTheme,
-          logo: 'https://idchain.id/images/logo.png'
-        },
+        ui: {},
         value: WS_URL
       }
     ]
@@ -61,11 +53,7 @@ export function createOwn (t: TFunction): LinkOption[] {
         info: 'local',
         text: t('rpc.dev.custom.own', 'Custom', { ns: 'apps-config' }),
         textBy,
-        ui: {
-          color: '#33c3c1',
-          // identityIcon: IconTheme,
-          logo: 'https://idchain.id/images/logo.png'
-        },
+        ui: {},
         value: textBy
       }));
     }
@@ -83,11 +71,7 @@ export function createDev (t: TFunction): LinkOption[] {
       info: 'local',
       text: t('rpc.dev.local', 'Local Node', { ns: 'apps-config' }),
       textBy: '127.0.0.1:9944',
-      ui: {
-        color: '#33c3c1',
-        // identityIcon: IconTheme,
-        logo: 'https://idchain.id/images/logo.png'
-      },
+      ui: {},
       value: 'ws://127.0.0.1:9944'
     }
   ];

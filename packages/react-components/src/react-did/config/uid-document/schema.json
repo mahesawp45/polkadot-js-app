@@ -1,0 +1,74 @@
+{
+    "$id": "https://dummyjson.com/c/5b1c-2f45-4756-be94",
+    "$schema": "https://dummyjson.com/c/c703-da97-48ca-9a70",
+    "type": "object",
+    "properties": {
+        "$id": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^uid:document:0x[0-9a-f]+$"
+        },
+        "$schema": {
+            "type": "string",
+            "format": "uri",
+            "const": "https://dummyjson.com/c/5b1c-2f45-4756-be94"
+        },
+        "title": {
+            "type": "string"
+        },
+        "type": {
+            "type": "string",
+            "const": "object"
+        },
+        "properties": {
+            "type": "object",
+            "patternProperties": {
+                "^.*$": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": [
+                                "string",
+                                "integer",
+                                "number",
+                                "boolean"
+                            ]
+                        },
+                        "$ref": {
+                            "type": "string",
+                            "format": "uri"
+                        },
+                        "format": {
+                            "type": "string",
+                            "enum": [
+                                "date",
+                                "time",
+                                "uri"
+                            ]
+                        }
+                    },
+                    "oneOf": [
+                        {
+                            "required": [
+                                "type"
+                            ]
+                        },
+                        {
+                            "required": [
+                                "$ref"
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "required": [
+        "$id",
+        "title",
+        "$schema",
+        "properties",
+        "type"
+    ]
+}

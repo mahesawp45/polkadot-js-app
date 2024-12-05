@@ -22,7 +22,7 @@ import CreateEthDerivationPath, { ETH_DEFAULT_PATH } from './CreateEthDerivation
 import CreateSuriLedger from './CreateSuriLedger.js';
 import ExternalWarning from './ExternalWarning.js';
 
-const DEFAULT_PAIR_TYPE = 'sr25519';
+const DEFAULT_PAIR_TYPE = 'ed25519';
 const STEPS_COUNT = 3;
 
 function getSuri (seed: string, derivePath: string, pairType: PairType): string {

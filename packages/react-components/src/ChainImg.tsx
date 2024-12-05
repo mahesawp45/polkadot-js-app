@@ -28,13 +28,11 @@ function ChainImg ({ className = '', isInline, logo, onClick, withoutHl }: Props
     const endpoint = endpoints.find((o) => o.info === logo);
     const found = endpoint?.ui.logo || logo || apiEndpoint?.ui.logo;
     const imgBase = found || externalEmptySVG;
-    const [isFa, img] = !imgBase || imgBase === 'empty' || !(imgBase.startsWith('data:') || imgBase.startsWith('fa;') || imgBase.startsWith('https:'))
+    const [isFa, img] = !imgBase || imgBase === 'empty' || !(imgBase.startsWith('data:') || imgBase.startsWith('fa;'))
       ? [false, externalEmptySVG]
       : imgBase.startsWith('fa;')
         ? [true, imgBase.substring(3)]
-        : imgBase.startsWith('https:')
-          ? [false, imgBase] // Handle 'https:' URLs as valid image sources
-          : [false, imgBase];
+        : [false, imgBase];
 
     return [!found || logo === 'empty', img, isFa];
   }, [apiEndpoint, logo]);

@@ -24,17 +24,7 @@ function defaultT (keyOrText: string, text?: string | TOptions, options?: TOptio
 
 export function createWsEndpoints (t: TFunction = defaultT, firstOnly = false, withSort = true): LinkOption[] {
   return [
-    ...createCustom(t),
-    {
-      isDisabled: false,
-      isHeader: true,
-      isSpaced: true,
-      text: t('rpc.header.paseo.relay', 'ID Chain', { ns: 'apps-config' }),
-      textBy: '',
-      ui: {},
-      value: ''
-    },
-    ...expandEndpoints(t, [prodRelayPolkadot], firstOnly, withSort),
+    // ...createCustom(t),
     // {
     //   isDisabled: false,
     //   isHeader: true,
@@ -73,16 +63,16 @@ export function createWsEndpoints (t: TFunction = defaultT, firstOnly = false, w
     //   value: ''
     // },
     // ...expandEndpoints(t, [testRelayRococo], firstOnly, withSort),
-    // {
-    //   isDisabled: false,
-    //   isHeader: true,
-    //   isSpaced: true,
-    //   text: t('rpc.header.paseo.relay', 'ID CHAIN', { ns: 'apps-config' }),
-    //   textBy: '',
-    //   ui: {},
-    //   value: ''
-    // },
-    // ...expandEndpoints(t, [testRelayPaseo], firstOnly, withSort),
+    {
+      isDisabled: false,
+      isHeader: true,
+      isSpaced: true,
+      text: t('rpc.header.paseo.relay', 'ID CHAIN', { ns: 'apps-config' }),
+      textBy: '',
+      ui: {},
+      value: ''
+    },
+    ...expandEndpoints(t, [testRelayPaseo], firstOnly, withSort),
     // {
     //   isDisabled: false,
     //   isHeader: true,
@@ -109,11 +99,7 @@ export function createWsEndpoints (t: TFunction = defaultT, firstOnly = false, w
       isSpaced: true,
       text: t('rpc.header.dev', 'Development', { ns: 'apps-config' }),
       textBy: '',
-      ui: {
-        color: '#33c3c1',
-        // identityIcon: IconTheme,
-        logo: 'https://idchain.id/images/logo.png'
-      },
+      ui: {},
       value: ''
     },
     ...createDev(t),

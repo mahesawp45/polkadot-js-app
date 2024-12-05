@@ -18,7 +18,7 @@ const FACTORS = [0.2126, 0.7152, 0.0722];
 const PARTS = [0, 2, 4];
 const VERY_DARK = 16;
 
-export const defaultHighlight = '#8340e8';
+export const defaultHighlight = '#f19135';
 
 function getHighlight (uiHighlight: string | undefined): string {
   return (uiHighlight || defaultHighlight);

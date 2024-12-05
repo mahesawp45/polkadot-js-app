@@ -10,6 +10,8 @@ import Sidebar from '../Sidebar.js';
 import { styled } from '../styled.js';
 import { colorLink } from '../styles/theme.js';
 import Balances from './Balances.js';
+import DIDComponent from './Did.js';
+
 import Identity from './Identity.js';
 import Multisig from './Multisig.js';
 import SidebarEditableSection from './SidebarEditableSection.js';
@@ -49,6 +51,7 @@ function FullSidebar ({ address, className = '', dataTestId, onClose, onUpdateNa
       </div>
       <div className='ui--ScrollSection'>
         <Balances address={address} />
+        <DIDComponent address={address} />
         <Identity
           address={address}
           identity={identity}
