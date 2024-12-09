@@ -119,6 +119,8 @@
     "@polkadot/x-textdecoder": "^13.1.1",
     "@polkadot/x-textencoder": "^13.1.1",
     "@polkadot/x-ws": "^13.1.1",
-    "typescript": "^5.3.3"
+    "cbor-web": "9.0.0",
+    "typescript": "^5.3.3",
+    "typescript-logging": "1.0.0"
   }
 }

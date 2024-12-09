@@ -2,7 +2,12 @@ import { base58Encode } from "@polkadot/util-crypto";
 
 
 import { DidResourceUri, UidDocument } from "react-components/src/react-did/interfaces/uid/uidDocument.js";
-import { ConformingDidDocument, encryptionKeyTypesMap, JsonLDDidDocument, verificationKeyTypesMap } from "react-components/src/react-did/interfaces/uid/UidDocumentExporter.js";
+import {
+  ConformingDidDocument,
+  encryptionKeyTypesMap,
+  JsonLDDidDocument,
+  verificationKeyTypesMap,
+} from "../../../interfaces/uid/UidDocumentExporter.js";
 import { UID_DID_CONTEXT_URL, W3C_DID_CONTEXT_URL } from "./uidContexts.js";
 
 function exportToJsonDidDocument(did: UidDocument): ConformingDidDocument {

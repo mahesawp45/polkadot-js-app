@@ -28,6 +28,7 @@
     "@polkadot/ui-settings": "^3.10.1",
     "@polkadot/util": "^13.1.1",
     "@polkadot/util-crypto": "^13.1.1",
+    "cbor-web": "9.0.0",
     "chart.js": "^4.4.1",
     "chartjs-plugin-annotation": "^3.0.1",
     "chartjs-plugin-crosshair": "^2.0.0",
@@ -49,7 +50,8 @@
     "semantic-ui-react": "^0.88.2",
     "store": "^2.0.12",
     "styled-components": "^6.1.1",
-    "styled-theming": "^2.2.0"
+    "styled-theming": "^2.2.0",
+    "typescript-logging": "1.0.0"
   },
   "devDependencies": {
     "@types/chartjs-plugin-crosshair": "^1.1.4",
